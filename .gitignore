@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+*.pyc
+*.pyo
+
+# Virtual Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Environment Variables (NEVER commit this)
+.env
+.env.local
+.env.production
+
+# Docker
+docker-compose.override.yml.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Jupyter
+.ipynb_checkpoints
+
+# LangSmith / LangChain cache
+.langchain.db
+
+# Model cache (Sentence Transformers downloads)
+.cache/
+models/
+
+# Database dumps
+*.sql.dump
+*.pg_dump

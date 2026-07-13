@@ -1,0 +1,1 @@
+<!-- Architecture agent system prompt -->
