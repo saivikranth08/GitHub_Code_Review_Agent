@@ -1,1 +1,0 @@
-<!-- Performance agent system prompt -->
