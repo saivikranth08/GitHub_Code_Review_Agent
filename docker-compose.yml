@@ -1,1 +1,184 @@
-# Full stack Docker Compose — all 11 services — Phase 1
+version: '3.9'
+
+networks:
+  review_net:
+    driver: bridge   # internal private network — containers talk by service name
+
+volumes:
+  postgres_data:     # all findings, reviews, feedback — CRITICAL backup
+  qdrant_data:       # learned code patterns (embeddings) — CRITICAL backup
+  redis_data:        # job queue state — recoverable if lost
+  grafana_data:      # dashboard configs — low priority
+  prometheus_data:   # metrics history — low priority
+
+services:
+
+  # ── Infrastructure (starts first, no dependencies) ──────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - review_net
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - review_net
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    networks:
+      - review_net
+    restart: unless-stopped
+
+  # ── Application (waits for infra to be healthy) ─────────────────────────────
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - review_net
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/worker/Dockerfile
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4 -Q reviews
+    env_file: .env
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - review_net
+    restart: unless-stopped
+
+  worker-beat:
+    build:
+      context: .
+      dockerfile: docker/worker/Dockerfile
+    command: celery -A app.workers.celery_app beat --loglevel=info
+    env_file: .env
+    depends_on:
+      - worker
+    networks:
+      - review_net
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    env_file: .env
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - review_net
+    restart: unless-stopped
+
+  # ── Proxy (single public entry point) ───────────────────────────────────────
+
+  nginx:
+    build:
+      context: docker/nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"       # only container with a public port
+    depends_on:
+      - api
+      - frontend
+    networks:
+      - review_net
+    restart: unless-stopped
+
+  # ── Monitoring ───────────────────────────────────────────────────────────────
+
+  flower:
+    image: mher/flower:2.0
+    command: celery flower --broker=${CELERY_BROKER_URL} --port=5555
+    env_file: .env
+    depends_on:
+      - redis
+    networks:
+      - review_net
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./docker/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+    networks:
+      - review_net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: http://localhost/grafana
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - review_net
+    restart: unless-stopped
