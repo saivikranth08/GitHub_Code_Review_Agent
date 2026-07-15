@@ -6,19 +6,21 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install base Python dependencies (shared with api)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the Sentence Transformer embedding model at BUILD time
-# This bakes the model into the image — zero cold-start delay when worker starts
-# Model: all-MiniLM-L6-v2 (384 dimensions, 80MB, runs on CPU, completely free)
+# Install CPU-only PyTorch + sentence-transformers (worker exclusive)
+# CPU-only = ~200MB instead of 900MB with CUDA — we don't need GPU for embeddings
+RUN pip install --no-cache-dir \
+    torch --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir sentence-transformers>=3.1.0
+
+# Pre-download the embedding model at BUILD time (zero cold-start)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
 # Copy app code and prompts
 COPY app/ ./app/
 COPY prompts/ ./prompts/
 
-# CMD is NOT set here — it's defined per-service in docker-compose.yml
-# worker:      celery -A app.workers.celery_app worker --loglevel=info --concurrency=4 -Q reviews
-# worker-beat: celery -A app.workers.celery_app beat --loglevel=info
+# CMD is set per-service in docker-compose.yml
