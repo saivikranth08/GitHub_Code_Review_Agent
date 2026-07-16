@@ -13,6 +13,8 @@ from qdrant_client import QdrantClient
 
 from app.config import settings
 
+from app.api.webhook import router as webhook_router
+
 logger = structlog.get_logger()
 
 
@@ -127,7 +129,7 @@ async def root():
 
 
 # ── Register routers (added phase by phase) ───────────────────────────────────
-# Phase 2: from app.api.webhook import router as webhook_router
-# Phase 2: app.include_router(webhook_router)
+app.include_router(webhook_router, prefix="/api/webhooks", tags=["Webhooks"])
+
 # Phase 3: from app.api.dashboard import router as dashboard_router
 # Phase 5: from app.api.feedback import router as feedback_router
