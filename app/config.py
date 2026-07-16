@@ -12,8 +12,10 @@ class Settings(BaseSettings):
     github_webhook_secret: str = ""
     github_token: str = ""
 
-    # ── LLM (Groq only) ───────────────────────────────────────────────────────
+    # ── LLM (Groq & Cohere) ───────────────────────────────────────────────────
     groq_api_key: str = ""
+    cohere_api_key: str = ""
+    embedding_model: str = "embed-english-v3.0"
 
     # ── LangSmith ─────────────────────────────────────────────────────────────
     langchain_tracing_v2: bool = True

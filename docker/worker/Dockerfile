@@ -10,14 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install CPU-only PyTorch + sentence-transformers (worker exclusive)
-# CPU-only = ~200MB instead of 900MB with CUDA — we don't need GPU for embeddings
-RUN pip install --no-cache-dir \
-    torch --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir sentence-transformers>=3.1.0
-
-# Pre-download the embedding model at BUILD time (zero cold-start)
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
 # Copy app code and prompts
 COPY app/ ./app/

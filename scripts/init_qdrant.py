@@ -20,7 +20,7 @@ def init_qdrant():
         client.create_collection(
             collection_name=settings.qdrant_collection,
             vectors_config=VectorParams(
-                size=384,               # all-MiniLM-L6-v2 output dimensions
+                size=1024,              # cohere embed-english-v3.0 output dimensions
                 distance=Distance.COSINE  # cosine similarity for semantic search
             ),
             optimizers_config=OptimizersConfigDiff(
@@ -28,7 +28,7 @@ def init_qdrant():
             ),
         )
         print(f"✅ Qdrant collection '{settings.qdrant_collection}' created")
-        print(f"   Vector size: 384 (all-MiniLM-L6-v2)")
+        print(f"   Vector size: 1024 (Cohere embed-english-v3.0)")
         print(f"   Distance: Cosine similarity")
     else:
         print(f"✅ Qdrant collection '{settings.qdrant_collection}' already exists — skipping")
