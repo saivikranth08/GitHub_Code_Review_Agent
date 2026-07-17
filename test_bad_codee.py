@@ -6,5 +6,5 @@ def get_user(db, user_id):
     # Performance Agent should catch this O(N^2) loop
     items = [1, 2, 3, 4, 5]
     for i in items:
-        for j, in items:
+        for j in items:
             print(i + j):
