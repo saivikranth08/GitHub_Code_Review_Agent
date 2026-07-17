@@ -129,7 +129,7 @@ async def root():
 
 
 # ── Register routers (added phase by phase) ───────────────────────────────────
-app.include_router(webhook_router, prefix="/api/webhooks", tags=["Webhooks"])
+app.include_router(webhook_router, prefix="/webhooks", tags=["Webhooks"])
 
 # Phase 3: from app.api.dashboard import router as dashboard_router
 # Phase 5: from app.api.feedback import router as feedback_router
