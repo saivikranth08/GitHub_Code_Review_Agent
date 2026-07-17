@@ -42,28 +42,56 @@ def run_review(
     )
 
     try:
-        # ── Phase 2: Fetch Diff and Post Dummy Comment ───────────────────
+        # ── Phase 3: LangGraph Orchestration ────────────────────────────
         from app.integrations.github_client import GithubClient
+        from app.orchestrator.graph import review_graph
         
         client = GithubClient()
         
         # 1. Fetch the raw diff from GitHub
         diff_text = client.get_pr_diff(repo, pr_number)
         
-        # 2. Post a dummy comment proving two-way communication works
-        dummy_comment = (
-            "🤖 **AI Code Review Agent**\n\n"
-            "I have successfully received your Pull Request webhook, verified the security signature, "
-            f"and fetched the raw diff (`{len(diff_text)} bytes`).\n\n"
-            "*(Phase 2 testing complete. AI review generation will be added in Phase 3!)*"
-        )
-        client.post_pr_comment(repo, pr_number, dummy_comment)
+        # 2. Skip if diff is empty
+        if not diff_text.strip():
+            client.post_pr_comment(repo, pr_number, "🤖 **AI Code Review Agent**\n\nNo code changes found to review.")
+            return {"status": "success", "findings": 0}
+
+        # 3. Execute the LangGraph Orchestrator
+        logger.info("executing_langgraph", pr_number=pr_number)
+        
+        initial_state = {
+            "pr_number": pr_number,
+            "repo": repo,
+            "diff_text": diff_text,
+            "findings": []
+        }
+        
+        # Run the graph
+        final_state = review_graph.invoke(initial_state)
+        all_findings = final_state.get("findings", [])
+        
+        # 4. Format findings into a beautiful Markdown comment
+        if not all_findings:
+            comment_body = "🤖 **AI Code Review Agent**\n\n✅ Great job! All 3 AI agents (Security, Performance, Style) reviewed the code and found zero issues."
+        else:
+            comment_body = f"🤖 **AI Code Review Agent**\n\n⚠️ Found **{len(all_findings)}** potential issues across 3 agents.\n\n"
+            comment_body += "| Severity | Category | File | Line | Issue |\n"
+            comment_body += "|----------|----------|------|------|-------|\n"
+            
+            for f in all_findings:
+                # Add emoji based on severity
+                sev_icon = "🔴" if f.severity == "HIGH" else "🟠" if f.severity == "MEDIUM" else "🟡"
+                comment_body += f"| {sev_icon} {f.severity} | {f.category} | `{f.file_path}` | {f.line_number} | **{f.title}**<br/>{f.description}<br/>*Suggestion:*<br/>`{f.suggestion}` |\n"
+
+        # 5. Post to GitHub
+        client.post_pr_comment(repo, pr_number, comment_body)
 
         logger.info(
             "review_task_completed",
             pr_number=pr_number,
             repo=repo,
-            status="Phase 2 test complete",
+            findings_count=len(all_findings),
+            status="Phase 3 review complete",
         )
 
         return {
@@ -71,7 +99,7 @@ def run_review(
             "pr_number": pr_number,
             "repo": repo,
             "task_id": self.request.id,
-            "diff_size": len(diff_text)
+            "findings_count": len(all_findings)
         }
 
     except Exception as exc:
