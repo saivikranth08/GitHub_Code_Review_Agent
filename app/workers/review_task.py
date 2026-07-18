@@ -70,6 +70,22 @@ def run_review(
         final_state = review_graph.invoke(initial_state)
         all_findings = final_state.get("findings", [])
         
+        # 3.5. Quality Evaluation (LLM-as-a-judge)
+        if all_findings:
+            from app.core.quality import QualityEvaluator
+            from app.config import settings
+            evaluator = QualityEvaluator()
+            
+            high_quality_findings = []
+            for finding in all_findings:
+                score = evaluator.evaluate_finding(diff_text, finding)
+                if score.confidence_score >= settings.confidence_threshold:
+                    high_quality_findings.append(finding)
+                else:
+                    logger.warning("finding_rejected_by_judge", title=finding.title, score=score.confidence_score, reason=score.reason)
+            
+            all_findings = high_quality_findings
+
         # 4. Format findings into a beautiful Markdown comment
         if not all_findings:
             comment_body = "🤖 **AI Code Review Agent**\n\n✅ Great job! All 3 AI agents (Security, Performance, Style) reviewed the code and found zero issues."
