@@ -7,4 +7,4 @@ def get_user(db, user_id):
     items = [1, 2, 3, 4, 5]
     for i in items:
         for j in items:
-            print(i + j) :::
+            print(i + j)
