@@ -17,10 +17,10 @@ class BaseAgent:
         self.system_prompt = system_prompt
         
         # Initialize Groq via Langchain
-        # llama3-70b-8192 is excellent for complex reasoning and structured output
+        # llama-3.3-70b-versatile is the newest stable Groq model
         self.llm = ChatGroq(
             api_key=settings.groq_api_key,
-            model="llama3-70b-8192",
+            model="llama-3.3-70b-versatile",
             temperature=0.0  # We want deterministic code reviews, not creative writing
         )
         
@@ -33,8 +33,22 @@ class BaseAgent:
         """
         logger.info("agent_starting_analysis", agent=self.agent_name)
         
+        # 1. Ask Qdrant for Long-Term Memory context
+        try:
+            from app.memory.qdrant_store import QdrantStore
+            qdrant = QdrantStore()
+            past_memory_text = qdrant.search_similar_code(diff_text)
+        except Exception as e:
+            logger.error("qdrant_memory_fetch_failed", error=str(e))
+            past_memory_text = ""
+            
+        # 2. Build the prompt
+        final_system_prompt = self.system_prompt
+        if past_memory_text:
+            final_system_prompt += f"\n\n{past_memory_text}"
+        
         messages = [
-            SystemMessage(content=self.system_prompt),
+            SystemMessage(content=final_system_prompt),
             HumanMessage(content=f"Please review the following git diff:\n\n{diff_text}")
         ]
         

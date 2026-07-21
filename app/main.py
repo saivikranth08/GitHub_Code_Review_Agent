@@ -133,3 +133,8 @@ app.include_router(webhook_router, prefix="/webhooks", tags=["Webhooks"])
 
 # Phase 3: from app.api.dashboard import router as dashboard_router
 # Phase 5: from app.api.feedback import router as feedback_router
+
+# Phase 6: Prometheus metrics endpoint
+from prometheus_client import make_asgi_app
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
