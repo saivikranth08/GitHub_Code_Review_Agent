@@ -41,6 +41,16 @@ def run_review(
         task_id=self.request.id,
     )
 
+    import time
+    from app.core.metrics import (
+        PR_PROCESSED_TOTAL,
+        FINDINGS_TOTAL,
+        JUDGE_SCORE_GAUGE,
+        REVIEW_DURATION_SECONDS
+    )
+    
+    start_time = time.time()
+    
     try:
         # ── Phase 3: LangGraph Orchestration ────────────────────────────
         from app.integrations.github_client import GithubClient
@@ -54,6 +64,8 @@ def run_review(
         # 2. Skip if diff is empty
         if not diff_text.strip():
             client.post_pr_comment(repo, pr_number, "🤖 **AI Code Review Agent**\n\nNo code changes found to review.")
+            PR_PROCESSED_TOTAL.labels(status="success").inc()
+            REVIEW_DURATION_SECONDS.observe(time.time() - start_time)
             return {"status": "success", "findings": 0}
 
         # 3. Execute the LangGraph Orchestrator
@@ -79,8 +91,10 @@ def run_review(
             high_quality_findings = []
             for finding in all_findings:
                 score = evaluator.evaluate_finding(diff_text, finding)
+                JUDGE_SCORE_GAUGE.set(score.confidence_score)
                 if score.confidence_score >= settings.confidence_threshold:
                     high_quality_findings.append(finding)
+                    FINDINGS_TOTAL.labels(agent=finding.category, severity=finding.severity).inc()
                 else:
                     logger.warning("finding_rejected_by_judge", title=finding.title, score=score.confidence_score, reason=score.reason)
             
@@ -132,6 +146,9 @@ def run_review(
             status="Phase 3 review complete",
         )
 
+        PR_PROCESSED_TOTAL.labels(status="success").inc()
+        REVIEW_DURATION_SECONDS.observe(time.time() - start_time)
+
         return {
             "status": "success",
             "pr_number": pr_number,
@@ -141,6 +158,7 @@ def run_review(
         }
 
     except Exception as exc:
+        PR_PROCESSED_TOTAL.labels(status="failed").inc()
         logger.error(
             "review_task_failed",
             pr_number=pr_number,
