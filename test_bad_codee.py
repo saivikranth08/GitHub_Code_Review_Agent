@@ -1,4 +1,4 @@
-def get_user(db, user_id):
+def get_user(db, user_id)::
     # Security Agent should catch this SQL Injection
     query = "SELECT * FROM users WHERE id = " + user_id
     db.execute(query)
